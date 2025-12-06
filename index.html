@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Quick Quiz (React)</title>
+
+  <!-- Tailwind Play CDN (works without build) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- React + ReactDOM UMD -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+  <!-- Babel to compile JSX in browser (dev use only) -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    /* minor extra styles */
+    body { -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-sky-50 to-white min-h-screen flex items-center justify-center p-4">
+  <div id="root" class="w-full max-w-2xl"></div>
+
+  <!-- App code -->
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const SAMPLE_QUESTIONS = [
+      { id:1, question:"What is the capital of France?", choices:["Paris","Berlin","Madrid","Rome"], answer:0, explanation:"Paris is the capital of France." },
+      { id:2, question:"Which planet is known as the Red Planet?", choices:["Venus","Mars","Jupiter","Saturn"], answer:1, explanation:"Mars is called the Red Planet." },
+      { id:3, question:"Who wrote the play 'Romeo and Juliet'?", choices:["Christopher Marlowe","William Shakespeare","Ben Jonson","John Donne"], answer:1, explanation:"William Shakespeare wrote it." },
+      { id:4, question:"What does CSS stand for?", choices:["Cascading Style Sheets","Computer Style Syntax","Creative Style System","Coded Style Script"], answer:0, explanation:"CSS = Cascading Style Sheets." },
+      { id:5, question:"Which language runs in a web browser?", choices:["Python","Java","C++","JavaScript"], answer:3, explanation:"JavaScript runs in the browser." }
+    ];
+
+    function QuizApp({ questions = SAMPLE_QUESTIONS, title = "Quick Quiz" }) {
+      const [stage, setStage] = useState("start"); // start, playing, review
+      const [currentIndex, setCurrentIndex] = useState(0);
+      const [selected, setSelected] = useState(null);
+      const [score, setScore] = useState(0);
+      const [highScore, setHighScore] = useState(() => Number(localStorage.getItem("quiz_high_score") || 0));
+      const [used5050, setUsed5050] = useState(false);
+      const [disabledChoices, setDisabledChoices] = useState([]);
+      const [showExplanation, setShowExplanation] = useState(false);
+      const [shuffledQuestions, setShuffledQuestions] = useState([]);
+      const [seed, setSeed] = useState(() => Date.now());
+
+      useEffect(() => {
+        // simple shuffle by seed
+        const s = [...questions];
+        for (let i = s.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.abs(Math.sin(seed + i) * 10000) % (i + 1));
+          [s[i], s[j]] = [s[j], s[i]];
+        }
+        setShuffledQuestions(s);
+      }, [questions, seed]);
+
+      useEffect(() => {
+        localStorage.setItem("quiz_high_score", String(highScore));
+      }, [highScore]);
+
+      function startGame() {
+        setStage("playing");
+        setCurrentIndex(0);
+        setScore(0);
+        setSelected(null);
+        setDisabledChoices([]);
+        setUsed5050(false);
+        setShowExplanation(false);
+        setSeed(Date.now());
+      }
+
+      function selectChoice(idx) {
+        if (selected !== null) return;
+        setSelected(idx);
+        const q = shuffledQuestions[currentIndex];
+        const correct = q.answer === idx;
+        if (correct) setScore(s => s + 1);
+        setShowExplanation(true);
+
+        // small delay so user sees feedback
+        setTimeout(() => {
+          goNext();
+        }, 900);
+      }
+
+      function goNext() {
+        setSelected(null);
+        setShowExplanation(false);
+        setDisabledChoices([]);
+        if (currentIndex + 1 >= shuffledQuestions.length) {
+          setStage("review");
+          if (score > highScore) setHighScore(score);
+          return;
+        }
+        setCurrentIndex(i => i + 1);
+      }
+
+      function use5050() {
+        if (used5050) return;
+        const q = shuffledQuestions[currentIndex];
+        const correct = q.answer;
+        const wrongs = q.choices.map((_, i) => i).filter(i => i !== correct);
+        // remove two wrong options (or as many as possible)
+        const toRemove = [];
+        while (toRemove.length < 2 && wrongs.length) {
+          const idx = Math.floor(Math.random() * wrongs.length);
+          toRemove.push(wrongs.splice(idx,1)[0]);
+        }
+        setDisabledChoices(toRemove);
+        setUsed5050(true);
+      }
+
+      function restartHome() {
+        setStage("start");
+      }
+
+      const q = shuffledQuestions[currentIndex] || {};
+
+      return (
+        <div className="bg-white rounded-2xl shadow-lg p-6">
+          <header className="flex items-center justify-between mb-4">
+            <h1 className="text-2xl font-bold">{title}</h1>
+            <div className="text-sm text-slate-600">High score: {highScore}</div>
+          </header>
+
+          {stage === "start" && (
+            <div className="space-y-4">
+              <p className="text-slate-700">Ready for a quick brain workout? {questions.length} questions, multiple choice.</p>
+              <div className="flex gap-2">
+                <button onClick={startGame} className="px-4 py-2 bg-sky-600 text-white rounded-md shadow">Start</button>
+                <button onClick={() => setSeed(Date.now())} className="px-4 py-2 border rounded-md">Shuffle</button>
+              </div>
+            </div>
+          )}
+
+          {stage === "playing" && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="text-sm">Question {currentIndex+1}/{shuffledQuestions.length}</div>
+                <div className="text-sm">Score: {score}</div>
+              </div>
+
+              <div className="bg-sky-50 p-4 rounded-lg">
+                <h2 className="text-lg font-semibold mb-3">{q.question}</h2>
+
+                <div className="grid grid-cols-1 gap-2">
+                  {q.choices && q.choices.map((c, idx) => {
+                    const isDisabled = disabledChoices.includes(idx);
+                    const isSelected = selected === idx;
+                    const correctIdx = q.answer;
+                    const showCorrect = selected !== null && idx === correctIdx;
+                    const className = [
+                      "text-left p-3 rounded-md border focus:outline-none",
+                      isDisabled ? "opacity-40 cursor-not-allowed" : "bg-white",
+                      isSelected ? (idx === correctIdx ? "bg-green-100 border-green-300" : "bg-red-100 border-red-300") : ""
+                    ].join(" ");
+
+                    return (
+                      <button key={idx}
+                        onClick={() => selectChoice(idx)}
+                        disabled={isDisabled || selected !== null}
+                        aria-pressed={isSelected}
+                        className={className}>
+                        <div className="flex items-center">
+                          <span className="w-6 font-mono">{String.fromCharCode(65+idx)}</span>
+                          <span>{c}</span>
+                          {showCorrect && <span className="ml-auto text-sm text-green-600">✓</span>}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="flex items-center justify-between mt-3">
+                  <div className="text-sm">{showExplanation ? q.explanation : 'Pick an answer'}</div>
+                  <div className="flex gap-2">
+                    <button onClick={use5050} disabled={used5050} className="px-3 py-1 border rounded">50/50</button>
+                    <button onClick={goNext} className="px-3 py-1 border rounded">Skip</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {stage === "review" && (
+            <div className="space-y-4">
+              <h2 className="text-xl font-semibold">Results</h2>
+              <p className="text-slate-700">You scored {score} / {shuffledQuestions.length}</p>
+              <div className="flex gap-2">
+                <button onClick={startGame} className="px-4 py-2 bg-sky-600 text-white rounded-md">Play again</button>
+                <button onClick={restartHome} className="px-4 py-2 border rounded-md">Home</button>
+              </div>
+              <div className="mt-3">
+                <h3 className="font-semibold">Review</h3>
+                <ol className="list-decimal pl-5 mt-2">
+                  {shuffledQuestions.map((qq,i) => (
+                    <li key={qq.id} className="mb-2">
+                      <div className="font-medium">{qq.question}</div>
+                      <div className="text-sm">Answer: <span className="font-semibold">{qq.choices[qq.answer]}</span></div>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Render
+    ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(QuizApp));
+  </script>
+</body>
+</html>
